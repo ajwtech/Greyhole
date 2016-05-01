@@ -21,6 +21,7 @@ along with Greyhole.  If not, see <http://www.gnu.org/licenses/>.
 // Other helpers
 require_once('includes/ConfigHelper.php');
 require_once('includes/DB.php');
+require_once('includes/Fsck.php');
 require_once('includes/Log.php');
 require_once('includes/MigrationHelper.php');
 require_once('includes/PoolDriveSelector.php');
@@ -326,11 +327,6 @@ class FSCKLogFile {
         $logfile = "$this->path/$this->filename";
         if ($this->filename == 'fsck_checksums.log') {
             return file_get_contents($logfile) . "\nNote: You should manually delete the $logfile file once you're done with it.";
-        } else if ($this->filename == 'fsck_files.log') {
-            global $fsck_report;
-            $fsck_report = unserialize(file_get_contents($logfile));
-            unlink($logfile);
-            return get_fsck_report() . "\nNote: This report is a complement to the last report you've received. It details possible errors with files for which the fsck was postponed.";
         } else {
             return '[empty]';
         }
@@ -339,8 +335,6 @@ class FSCKLogFile {
     private function getSubject() {
         if ($this->filename == 'fsck_checksums.log') {
             return 'Mismatched checksums in Greyhole file copies';
-        } else if ($this->filename == 'fsck_files.log') {
-            return 'fsck_files of Greyhole shares on ' . exec('hostname');
         } else {
             return 'Unknown FSCK report';
         }
@@ -354,22 +348,6 @@ class FSCKLogFile {
             }
         }
         return $this->lastEmailSentTime;
-    }
-    
-    public static function loadFSCKReport($what) {
-        $logfile = self::PATH . '/fsck_files.log';
-        if (file_exists($logfile)) {
-            global $fsck_report;
-            $fsck_report = unserialize(file_get_contents($logfile));
-        } else {
-            initialize_fsck_report($what);
-        }
-    }
-
-    public static function saveFSCKReport() {
-        global $fsck_report;
-        $logfile = self::PATH . '/fsck_files.log';
-        file_put_contents($logfile, serialize($fsck_report));
     }
 }
 
@@ -399,17 +377,6 @@ function fix_symlinks_on_share($share_name) {
         }
     }
     echo " Done.\n";
-}
-
-function schedule_fsck_all_shares($fsck_options=array()) {
-    foreach (SharesConfig::getShares() as $share_name => $share_options) {
-        $query = "INSERT INTO tasks SET action = 'fsck', share = :full_path, additional_info = :fsck_options, complete = 'yes'";
-        $params = array(
-            'full_path' => $share_options[CONFIG_LANDING_ZONE],
-            'fsck_options' => empty($fsck_options) ? NULL : implode('|', $fsck_options)
-        );
-        DB::insert($query, $params);
-    }
 }
 
 function kshift(&$arr) {

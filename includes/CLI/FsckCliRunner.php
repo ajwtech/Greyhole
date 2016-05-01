@@ -20,26 +20,18 @@ along with Greyhole.  If not, see <http://www.gnu.org/licenses/>.
 
 require_once('includes/CLI/AbstractCliRunner.php');
 
-define('OPTION_EMAIL', 'email');
-define('OPTION_IF_CONF_CHANGED', 'if-conf-changed');
-define('OPTION_CHECKSUMS','checksums');
-define('OPTION_SKIP_METASTORE','skip-metastore');
-define('OPTION_ORPHANED','orphaned');
-define('OPTION_DU','du');
-define('OPTION_DEL_ORPHANED_METADATA','del-orphaned-metadata');
-
 class FsckCliRunner extends AbstractCliRunner {
     private $dir = '';
     private $fsck_options = array();
     
     private static $available_options = array(
-       'email-report' => OPTION_EMAIL,
-       'dont-walk-metadata-store' => OPTION_SKIP_METASTORE,
-       'if-conf-changed' => OPTION_IF_CONF_CHANGED,
-       'disk-usage-report' => OPTION_DU,
-       'find-orphaned-files' => OPTION_ORPHANED,
-       'checksums' => OPTION_CHECKSUMS,
-       'delete-orphaned-metadata' => OPTION_DEL_ORPHANED_METADATA
+       'email-report'             => Fsck::OPTION_EMAIL,
+       'dont-walk-metadata-store' => Fsck::OPTION_SKIP_METASTORE,
+       'if-conf-changed'          => Fsck::OPTION_IF_CONF_CHANGED,
+       'disk-usage-report'        => Fsck::OPTION_DU,
+       'find-orphaned-files'      => Fsck::OPTION_ORPHANED,
+       'checksums'                => Fsck::OPTION_CHECKSUMS,
+       'delete-orphaned-metadata' => Fsck::OPTION_DEL_ORPHANED_METADATA
     );
 
     function __construct($options, $cli_command) {
@@ -62,20 +54,10 @@ class FsckCliRunner extends AbstractCliRunner {
 
     public function run() {
         if (empty($this->dir)) {
-            schedule_fsck_all_shares($this->fsck_options);
+            Fsck::scheduleForAllShares($this->fsck_options);
             $this->dir = 'all shares';
         } else {
-            $query = "INSERT INTO tasks SET action = 'fsck', share = :full_path, additional_info = :fsck_options, complete = 'yes'";
-            if (empty($this->fsck_options)) {
-                $fsck_options = NULL;
-            } else {
-                $fsck_options = implode('|', $this->fsck_options);
-            }
-            $params = array(
-                'full_path' => $this->dir,
-                'fsck_options' => $fsck_options,
-            );
-            DB::insert($query, $params);
+            Fsck::scheduleForDir($this->dir, $this->fsck_options);
         }
         $this->log("fsck of $this->dir has been scheduled. It will start after all currently pending tasks have been completed.");
         if (isset($this->options['checksums'])) {

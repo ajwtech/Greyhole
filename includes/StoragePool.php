@@ -18,6 +18,8 @@ You should have received a copy of the GNU General Public License
 along with Greyhole.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+define('SKIP_CACHE', FALSE);
+
 final class StoragePool {
     private static $greyhole_owned_drives = array();
     private static $gone_ok_drives = NULL;
@@ -133,18 +135,18 @@ final class StoragePool {
         }
         if ($needs_fsck !== FALSE) {
             set_metastore_backup();
-            get_metastores(FALSE); // FALSE => Resets the metastores cache
+            get_metastores(SKIP_CACHE);
             clearstatcache();
 
             if (!$skip_fsck) {
-                initialize_fsck_report('All shares');
                 if ($needs_fsck === 2) {
                     foreach ($returned_drives as $drive) {
                         $metastores = get_metastores_from_storage_volume($drive);
                         Log::info("Starting fsck for metadata store on $drive which came back online.");
+                        $fsck = new Fsck();
                         foreach ($metastores as $metastore) {
                             foreach (SharesConfig::getShares() as $share_name => $share_options) {
-                                gh_fsck_metastore($metastore,"/$share_name", $share_name);
+                                $fsck->fsckMetastore($metastore, "/$share_name", $share_name);
                             }
                         }
                         Log::info("fsck for returning drive $drive's metadata store completed.");
@@ -154,7 +156,7 @@ final class StoragePool {
                     Log::info("Starting fsck for all shares - caused by missing drive. Will just recreate symlinks to existing copies when possible; won't create new copies just yet.");
                     fix_all_symlinks();
                 }
-                schedule_fsck_all_shares(array('email'));
+                Fsck::scheduleForAllShares(array(Fsck::OPTION_EMAIL));
                 Log::info("  fsck for all shares scheduled.");
             }
 

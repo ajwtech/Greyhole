@@ -52,19 +52,14 @@ class GoneCliRunner extends AbstractPoolDriveCliRunner {
             global $going_drive; // Used in StoragePool::is_pool_drive()
             $going_drive = $this->drive;
 
-            // For the fsck_file calls to be able to use the files on $going_drive if needed, to create extra copies.
-            global $options;
-            $options['find-orphans'] = TRUE;
-
             // fsck shares with only 1 file copy to remove those from $this->drive
-            initialize_fsck_report('Shares with only 1 copy');
             foreach (SharesConfig::getShares() as $share_name => $share_options) {
                 $this->log();
                 if ($share_options[CONFIG_NUM_COPIES] == 1) {
                     $this->logn("Moving file copies for share '$share_name'... Please be patient... ");
                     if (is_dir("$going_drive/$share_name")) {
-                        gh_fsck_reset_du($share_name);
-                        gh_fsck($share_options[CONFIG_LANDING_ZONE], $share_name);
+                        // Use OPTION_ORPHANED for the Fsck::fsckFile() calls to be able to use the files on $going_drive if needed, to create extra copies.
+                        Fsck::runForLZ($share_options[CONFIG_LANDING_ZONE], $share_name, array(Fsck::OPTION_ORPHANED, Fsck::OPTION_DU));
                     }
                     $this->log("Done.");
                 } else {
@@ -97,7 +92,7 @@ class GoneCliRunner extends AbstractPoolDriveCliRunner {
 
         if ($this->isGoing()) {
             // Schedule fsck for all shares to re-create missing copies on other shares
-            schedule_fsck_all_shares(array('email'));
+            Fsck::scheduleForAllShares(array('email'));
             $this->log("All the files that were only on $this->drive have been copied somewhere else.");
             $this->log("A fsck of all shares has been scheduled, to recreate other file copies. It will start after all currently pending tasks have been completed.");
             unlink($this->drive . "/.greyhole_used_this");
